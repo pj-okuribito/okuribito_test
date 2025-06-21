@@ -13,6 +13,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - No formal test suite currently exists
 - Verify functionality by running simulations and checking output plots/results
 
+### Development Tracking & Workflow
+- **Development Tracking**: `python -c "from dev_tracker import track_development_change; track_development_change('user_prompt', 'description')"`
+- **Push to Remote**: `python -c "from dev_tracker import push_to_remote; push_to_remote()"`
+- **Branch Workflow**: All changes automatically create feature branches (never direct commits to master)
+- **Sound Notifications**: Completion sounds play when tasks finish (helps with multitasking)
+- **Change Logs**: All development changes tracked in `change_logs/` with timestamps, session IDs, and user prompts
+
 ## Architecture Overview
 
 This is a stock trading simulation and backtesting system with a modular strategy pattern:
