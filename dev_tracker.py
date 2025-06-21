@@ -16,6 +16,7 @@ class DevTracker:
     def __init__(self, change_logs_dir: str = "change_logs"):
         self.change_logs_dir = change_logs_dir
         self.session_id = str(uuid.uuid4())[:8]
+        self.current_feature_branch = None
         
         # Ensure change_logs directory exists
         os.makedirs(change_logs_dir, exist_ok=True)
@@ -27,6 +28,60 @@ class DevTracker:
         clean_desc = "".join(c for c in description if c.isalnum() or c in (' ', '-', '_')).rstrip()
         clean_desc = clean_desc.replace(' ', '_').lower()[:30]  # Limit length
         return f"{timestamp}_{clean_desc}.json"
+    
+    def generate_branch_name(self, description: str) -> str:
+        """Generate a feature branch name from description"""
+        clean_desc = "".join(c for c in description if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        clean_desc = clean_desc.replace(' ', '-').lower()[:30]
+        timestamp = datetime.now().strftime("%m%d")
+        return f"feature/{timestamp}-{clean_desc}"
+    
+    def create_feature_branch(self, description: str) -> Dict:
+        """Create and switch to a new feature branch"""
+        try:
+            branch_name = self.generate_branch_name(description)
+            
+            # Check if we're already on a feature branch
+            current_branch_result = subprocess.run(['git', 'branch', '--show-current'], 
+                                                 capture_output=True, text=True, check=True)
+            current_branch = current_branch_result.stdout.strip()
+            
+            # Only create new branch if not already on a feature branch
+            if not current_branch.startswith('feature/'):
+                subprocess.run(['git', 'checkout', '-b', branch_name], check=True)
+                self.current_feature_branch = branch_name
+                return {"success": True, "branch": branch_name, "action": "created"}
+            else:
+                self.current_feature_branch = current_branch
+                return {"success": True, "branch": current_branch, "action": "using_existing"}
+                
+        except subprocess.CalledProcessError as e:
+            return {"success": False, "error": f"Branch creation failed: {e}"}
+    
+    def push_feature_branch(self, branch_name: str = None) -> Dict:
+        """Push feature branch to remote (not master)"""
+        try:
+            if branch_name is None:
+                # Get current branch
+                result = subprocess.run(['git', 'branch', '--show-current'], 
+                                      capture_output=True, text=True, check=True)
+                branch_name = result.stdout.strip()
+            
+            # Don't allow pushing directly to master
+            if branch_name == 'master' or branch_name == 'main':
+                return {"success": False, "error": "Direct push to master/main not allowed. Use feature branch."}
+            
+            # Push the feature branch
+            subprocess.run(['git', 'push', '-u', 'origin', branch_name], check=True)
+            
+            return {
+                "success": True, 
+                "branch": branch_name,
+                "message": f"Feature branch '{branch_name}' pushed to remote. Ready for PR creation."
+            }
+            
+        except subprocess.CalledProcessError as e:
+            return {"success": False, "error": f"Push failed: {e}"}
     
     def get_git_status(self) -> Dict:
         """Get current git status"""
@@ -100,8 +155,17 @@ class DevTracker:
         return filepath
     
     def track_change(self, user_prompt: str, description: str, 
-                    files_changed: List[str] = None, play_sound: bool = True) -> Dict:
-        """Complete workflow: commit changes and create changelog"""
+                    files_changed: List[str] = None, play_sound: bool = True, 
+                    create_branch: bool = True) -> Dict:
+        """Complete workflow: create branch, commit changes and create changelog"""
+        branch_info = {}
+        
+        # Create feature branch if requested
+        if create_branch:
+            branch_info = self.create_feature_branch(description)
+            if not branch_info["success"]:
+                return {"error": "Failed to create feature branch", "branch_info": branch_info}
+        
         # Get current git status
         git_status = self.get_git_status()
         
@@ -127,7 +191,8 @@ class DevTracker:
             "changelog_path": changelog_path,
             "commit_info": commit_info,
             "files_changed": files_changed,
-            "session_id": self.session_id
+            "session_id": self.session_id,
+            "branch_info": branch_info
         }
 
 
@@ -136,9 +201,18 @@ tracker = DevTracker()
 
 
 def track_development_change(user_prompt: str, description: str, 
-                           files_changed: List[str] = None, play_sound: bool = True) -> Dict:
+                           files_changed: List[str] = None, play_sound: bool = True,
+                           create_branch: bool = True) -> Dict:
     """Convenience function to track a development change"""
-    return tracker.track_change(user_prompt, description, files_changed, play_sound)
+    return tracker.track_change(user_prompt, description, files_changed, play_sound, create_branch)
+
+def push_to_remote() -> Dict:
+    """Safely push current feature branch to remote"""
+    return tracker.push_feature_branch()
+
+def create_feature_branch(description: str) -> Dict:
+    """Create a new feature branch"""
+    return tracker.create_feature_branch(description)
 
 
 if __name__ == "__main__":

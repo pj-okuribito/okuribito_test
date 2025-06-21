@@ -10,7 +10,8 @@
       "Bash(echo $VIRTUAL_ENV)",
       "Bash(uv install:*)",
       "Bash(git push:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": []
   }
