@@ -9,6 +9,7 @@ import json
 from datetime import datetime
 from typing import List, Dict, Optional
 import uuid
+from sound_notifier import play_completion_notification
 
 
 class DevTracker:
@@ -99,7 +100,7 @@ class DevTracker:
         return filepath
     
     def track_change(self, user_prompt: str, description: str, 
-                    files_changed: List[str] = None) -> Dict:
+                    files_changed: List[str] = None, play_sound: bool = True) -> Dict:
         """Complete workflow: commit changes and create changelog"""
         # Get current git status
         git_status = self.get_git_status()
@@ -115,6 +116,13 @@ class DevTracker:
         changelog_path = self.save_changelog(user_prompt, description, 
                                            files_changed, commit_info)
         
+        # Play completion sound if requested
+        if play_sound:
+            try:
+                play_completion_notification()
+            except Exception as e:
+                print(f"Sound notification failed: {e}")
+        
         return {
             "changelog_path": changelog_path,
             "commit_info": commit_info,
@@ -128,9 +136,9 @@ tracker = DevTracker()
 
 
 def track_development_change(user_prompt: str, description: str, 
-                           files_changed: List[str] = None) -> Dict:
+                           files_changed: List[str] = None, play_sound: bool = True) -> Dict:
     """Convenience function to track a development change"""
-    return tracker.track_change(user_prompt, description, files_changed)
+    return tracker.track_change(user_prompt, description, files_changed, play_sound)
 
 
 if __name__ == "__main__":
