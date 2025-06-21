@@ -144,6 +144,79 @@ class SimpleMovingAverageStrategy(TradingStrategy):
         
         return short_ma < long_ma
 
+class MomentumStrategy(TradingStrategy):
+    def __init__(self, lookback_period=10, momentum_threshold=0.02):
+        super().__init__("Momentum Strategy")
+        self.lookback_period = lookback_period
+        self.momentum_threshold = momentum_threshold
+    
+    def should_buy(self, data, current_idx):
+        if current_idx < self.lookback_period:
+            return False
+        
+        # Calculate momentum as percentage change over lookback period
+        current_price = data['close'].iloc[current_idx]
+        past_price = data['close'].iloc[current_idx - self.lookback_period]
+        momentum = (current_price - past_price) / past_price
+        
+        # Buy if positive momentum exceeds threshold
+        return momentum > self.momentum_threshold
+    
+    def should_sell(self, data, current_idx):
+        if current_idx < self.lookback_period:
+            return False
+        
+        # Calculate momentum as percentage change over lookback period
+        current_price = data['close'].iloc[current_idx]
+        past_price = data['close'].iloc[current_idx - self.lookback_period]
+        momentum = (current_price - past_price) / past_price
+        
+        # Sell if negative momentum exceeds threshold
+        return momentum < -self.momentum_threshold
+
+class RSIMomentumStrategy(TradingStrategy):
+    def __init__(self, rsi_period=14, oversold_threshold=30, overbought_threshold=70):
+        super().__init__("RSI Momentum Strategy")
+        self.rsi_period = rsi_period
+        self.oversold_threshold = oversold_threshold
+        self.overbought_threshold = overbought_threshold
+    
+    def calculate_rsi(self, prices):
+        """Calculate RSI (Relative Strength Index)"""
+        deltas = np.diff(prices)
+        gains = np.where(deltas > 0, deltas, 0)
+        losses = np.where(deltas < 0, -deltas, 0)
+        
+        avg_gain = np.mean(gains[-self.rsi_period:])
+        avg_loss = np.mean(losses[-self.rsi_period:])
+        
+        if avg_loss == 0:
+            return 100
+        
+        rs = avg_gain / avg_loss
+        rsi = 100 - (100 / (1 + rs))
+        return rsi
+    
+    def should_buy(self, data, current_idx):
+        if current_idx < self.rsi_period + 1:
+            return False
+        
+        prices = data['close'].iloc[:current_idx + 1].values
+        rsi = self.calculate_rsi(prices)
+        
+        # Buy when RSI indicates oversold condition (potential upward momentum)
+        return rsi < self.oversold_threshold
+    
+    def should_sell(self, data, current_idx):
+        if current_idx < self.rsi_period + 1:
+            return False
+        
+        prices = data['close'].iloc[:current_idx + 1].values
+        rsi = self.calculate_rsi(prices)
+        
+        # Sell when RSI indicates overbought condition (momentum reversing)
+        return rsi > self.overbought_threshold
+
 class BacktestEngine:
     def __init__(self, data_provider, initial_capital=10000):
         self.data_provider = data_provider
@@ -233,7 +306,9 @@ def main():
     strategies = [
         RandomStrategy(buy_probability=0.05, sell_probability=0.05),
         BuyAndHoldStrategy(),
-        SimpleMovingAverageStrategy(short_window=5, long_window=20)
+        SimpleMovingAverageStrategy(short_window=5, long_window=20),
+        MomentumStrategy(lookback_period=10, momentum_threshold=0.02),
+        RSIMomentumStrategy(rsi_period=14, oversold_threshold=30, overbought_threshold=70)
     ]
     
     # Run comparison
